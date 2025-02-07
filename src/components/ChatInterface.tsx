@@ -20,6 +20,10 @@ export default function ChatInterface() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [volume, setVolume] = useState(0);
+  const [isContinuous, setIsContinuous] = useState(false);
+  const [isAISpeaking, setIsAISpeaking] = useState(false);
+  const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,17 +33,34 @@ export default function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (restartTimeoutRef.current) {
+        clearTimeout(restartTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const handleStartRecording = () => {
     if (!speechService.checkSupport()) {
       setError('Speech recognition is not supported in your browser');
       return;
     }
 
+    setIsContinuous(true);
     setRecording(true);
     setError(null);
+    startListeningCycle();
+  };
+
+  const startListeningCycle = () => {
+    // Don't start listening if AI is speaking
+    if (isAISpeaking) return;
+
     speechService.startListening(
       (transcript, isFinal) => {
-        if (isFinal) {
+        if (isFinal && transcript.trim()) { // Only process non-empty transcripts
           handleSendMessage(transcript);
         }
       },
@@ -47,16 +68,35 @@ export default function ChatInterface() {
         console.error('Speech recognition error:', error);
         setRecording(false);
         setError(`Speech recognition error: ${error}`);
+      },
+      (newVolume) => {
+        setVolume(newVolume);
+      },
+      () => {
+        // Silence detected
+        if (isContinuous && !isAISpeaking) {
+          startListeningCycle();
+        }
       }
     );
   };
 
   const handleStopRecording = () => {
+    setIsContinuous(false);
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
     speechService.stopListening();
     setRecording(false);
+    setVolume(0);
   };
 
   const handleSendMessage = async (message: string) => {
+    // Stop listening while processing and during AI response
+    speechService.stopListening();
+    setRecording(false);
+    
     addMessage({ role: 'user', content: message });
     setProcessing(true);
     setError(null);
@@ -77,8 +117,26 @@ export default function ChatInterface() {
       addMessage({ role: 'assistant', content: data.text });
 
       if (data.audio) {
+        setIsAISpeaking(true);
         const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
-        audio.play();
+        
+        audio.onended = () => {
+          setIsAISpeaking(false);
+          if (isContinuous) {
+            // Add a delay before resuming listening to avoid picking up audio tail
+            restartTimeoutRef.current = setTimeout(() => {
+              if (isContinuous) {
+                setRecording(true);
+                startListeningCycle();
+              }
+            }, 1000); // 1 second delay
+          }
+        };
+
+        audio.play().catch(error => {
+          console.error('Error playing audio:', error);
+          setIsAISpeaking(false);
+        });
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -89,6 +147,10 @@ export default function ChatInterface() {
       });
     } finally {
       setProcessing(false);
+      if (!isAISpeaking && isContinuous) {
+        setRecording(true);
+        startListeningCycle();
+      }
     }
   };
 
@@ -107,7 +169,27 @@ export default function ChatInterface() {
       <div className="bg-[#075e54] dark:bg-gray-800 text-white p-4 flex items-center">
         <div className="flex-1">
           <h1 className="text-xl font-semibold">Mastra AI Assistant</h1>
-          {isProcessing && <p className="text-sm opacity-75">typing...</p>}
+          <div className="flex items-center text-sm opacity-75 space-x-2">
+            {isProcessing && <p>Processing...</p>}
+            {isAISpeaking && <p>AI Speaking...</p>}
+            {isRecording && !isAISpeaking && (
+              <div className="flex items-center space-x-2">
+                <div className="flex space-x-1">
+                  {[...Array(5)].map((_, i) => (
+                    <div
+                      key={i}
+                      className="w-1 bg-white rounded-full transition-all duration-200"
+                      style={{
+                        height: Math.min(4 + (volume / 25) * i, 16),
+                        opacity: 0.3 + (volume / 255) * 0.7
+                      }}
+                    />
+                  ))}
+                </div>
+                <p>Listening{isContinuous ? ' (Continuous)' : ''}</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -156,13 +238,19 @@ export default function ChatInterface() {
               isRecording
                 ? 'bg-red-500 hover:bg-red-600 scale-110'
                 : 'bg-[#075e54] hover:bg-[#064c44]'
-            } ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={isProcessing}
+            } ${(isProcessing || isAISpeaking) ? 'opacity-50 cursor-not-allowed' : ''} relative`}
+            disabled={isProcessing || isAISpeaking}
           >
             {isRecording ? (
               <FaStop className="text-white text-xl" />
             ) : (
               <FaMicrophone className="text-white text-xl" />
+            )}
+            {isRecording && !isAISpeaking && (
+              <div className="absolute -top-1 -right-1 w-3 h-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+              </div>
             )}
           </button>
         </div>
