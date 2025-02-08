@@ -55,12 +55,12 @@ export default function ChatInterface() {
   };
 
   const startListeningCycle = () => {
-    // Don't start listening if AI is speaking
+   
     if (isAISpeaking) return;
 
     speechService.startListening(
       (transcript, isFinal) => {
-        if (isFinal && transcript.trim()) { // Only process non-empty transcripts
+        if (isFinal && transcript.trim()) { 
           handleSendMessage(transcript);
         }
       },

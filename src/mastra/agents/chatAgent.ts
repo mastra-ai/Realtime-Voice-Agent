@@ -10,6 +10,6 @@ export const chatAgent = new Agent({
     provider: "GOOGLE",
     name: "gemini-1.5-flash",
     toolChoice: "auto",
-    apiKey: process.env.GOOGLE_API_KEY, // Add API key from environment variable
+    apiKey: process.env.GOOGLE_API_KEY, 
   },
 });

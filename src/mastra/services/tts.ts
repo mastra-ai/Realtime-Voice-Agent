@@ -1,7 +1,7 @@
 import { ElevenLabsTTS } from "@mastra/speech-elevenlabs";
 
 function createTTSService() {
-  // Private state
+  
   let tts: ElevenLabsTTS | null = null;
   let voiceId: string | null = null;
 
@@ -16,7 +16,7 @@ function createTTSService() {
       });
     }
 
-    // Fetch voices if not already done
+    
     if (!voiceId) {
       const voices = await tts.voices();
       voiceId = voices?.[0]?.voice_id ?? null;
@@ -29,7 +29,7 @@ function createTTSService() {
 
   // Stream audio
   async function streamAudio(text: string) {
-    // Ensure initialization
+    
     await initialize();
 
     if (!tts || !voiceId) {
@@ -44,7 +44,7 @@ function createTTSService() {
     return audioResult;
   }
 
-  // Return service methods
+
   return {
     initialize,
     streamAudio
