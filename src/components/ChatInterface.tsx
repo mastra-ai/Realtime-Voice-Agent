@@ -16,7 +16,7 @@ export default function ChatInterface() {
     updateLastMessage,
   } = useChatStore();
 
-  const [speechService] = useState(() => new SpeechRecognitionService());
+  const [speechService] = useState(() => SpeechRecognitionService());
   const audioRef = useRef<HTMLAudioElement>(null);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -43,7 +43,7 @@ export default function ChatInterface() {
   }, []);
 
   const handleStartRecording = () => {
-    if (!speechService.checkSupport()) {
+    if (!speechService.isSupported()) {
       setError('Speech recognition is not supported in your browser');
       return;
     }

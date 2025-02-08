@@ -1,36 +1,54 @@
 import { ElevenLabsTTS } from "@mastra/speech-elevenlabs";
 
-export class TTSService {
-  private tts: ElevenLabsTTS;
-  private voiceId: string | null = null;
+function createTTSService() {
+  // Private state
+  let tts: ElevenLabsTTS | null = null;
+  let voiceId: string | null = null;
 
-  constructor() {
-    this.tts = new ElevenLabsTTS({
-      model: {
-        name: "eleven_multilingual_v2",
-        apiKey: process.env.ELEVENLABS_API_KEY!,
-      },
-    });
-  }
+  // Initialize TTS service
+  async function initialize() {
+    if (!tts) {
+      tts = new ElevenLabsTTS({
+        model: {
+          name: "eleven_multilingual_v2",
+          apiKey: process.env.ELEVENLABS_API_KEY!,
+        },
+      });
+    }
 
-  async initialize() {
-    const voices = await this.tts.voices();
-    this.voiceId = voices?.[0]?.voice_id ?? null;
-    if (!this.voiceId) {
-      throw new Error("No voices available");
+    // Fetch voices if not already done
+    if (!voiceId) {
+      const voices = await tts.voices();
+      voiceId = voices?.[0]?.voice_id ?? null;
+      
+      if (!voiceId) {
+        throw new Error("No voices available");
+      }
     }
   }
 
-  async streamAudio(text: string) {
-    if (!this.voiceId) {
-      await this.initialize();
+  // Stream audio
+  async function streamAudio(text: string) {
+    // Ensure initialization
+    await initialize();
+
+    if (!tts || !voiceId) {
+      throw new Error("TTS service not properly initialized");
     }
 
-    const { audioResult } = await this.tts.stream({
+    const { audioResult } = await tts.stream({
       text,
-      voice: this.voiceId!,
+      voice: voiceId,
     });
 
     return audioResult;
   }
+
+  // Return service methods
+  return {
+    initialize,
+    streamAudio
+  };
 }
+
+export default createTTSService;

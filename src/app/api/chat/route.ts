@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { chatAgent } from '@/mastra/agents/chatAgent';
-import { TTSService } from '@/mastra/services/tts';
+import createTTSService from '@/mastra/services/tts';
 
-const ttsService = new TTSService();
+const ttsService = createTTSService();
 
 export async function POST(req: Request) {
   try {
