@@ -10,7 +10,7 @@ function createTTSService() {
     if (!tts) {
       tts = new ElevenLabsTTS({
         model: {
-          name: "eleven_multilingual_v2",
+          name: "eleven_flash_v2_5",
           apiKey: process.env.ELEVENLABS_API_KEY!,
         },
       });
@@ -19,7 +19,7 @@ function createTTSService() {
     
     if (!voiceId) {
       const voices = await tts.voices();
-      voiceId = voices?.[0]?.voice_id ?? null;
+      voiceId = voices?.[1]?.voice_id ?? null;
       
       if (!voiceId) {
         throw new Error("No voices available");

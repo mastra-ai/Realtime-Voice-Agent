@@ -121,14 +121,7 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
         };
 
         recognition.onerror = (event) => {
-          // Handle specific error cases
-          if (event.error === 'not-allowed') {
-            onError('Microphone access denied');
-          } else if (event.error === 'no-speech') {
-            onError('No speech detected');
-          } else {
-            onError(event.error);
-          }
+          onError(event.error);
           
           // Reset listening state
           isListening = false;
