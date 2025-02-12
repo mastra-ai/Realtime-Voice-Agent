@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SpeechRecognitionService } from '@/mastra/services/speechRecognition';
 import { useChatStore } from '@/store/chatStore';
-import { FuturisticMessage } from './ui/FuturisticMessage';
+import { AiMessage } from './ui/AiMessage';
 import { motion } from 'framer-motion';
 
 export default function ChatInterface() {
@@ -233,7 +233,7 @@ export default function ChatInterface() {
       >
         <div className="max-w-4xl mx-auto py-4 px-4 space-y-1">
           {messages.map((message, index) => (
-            <FuturisticMessage
+            <AiMessage
               key={index}
               isAI={message.role === 'assistant'}
               content={message.content}

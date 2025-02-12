@@ -8,7 +8,7 @@ interface FuturisticMessageProps {
   timestamp?: string;
 }
 
-export function FuturisticMessage({ isAI, content, avatar, timestamp }: FuturisticMessageProps) {
+export function AiMessage({ isAI, content, avatar, timestamp }: FuturisticMessageProps) {
   const chatLogo = '/images/V-logo.jpeg';
 
   return (
