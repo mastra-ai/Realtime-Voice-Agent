@@ -6,15 +6,8 @@
   --whatsapp-green: #075e54;
   --whatsapp-light-green: #dcf8c6;
   --whatsapp-bg: #efeae2;
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #000000;
+  --foreground: #ffffff;
 }
 
 html,
@@ -22,12 +15,407 @@ body {
   height: 100vh;
   margin: 0;
   padding: 0;
-  background-color: #d1d7db;
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+  background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+  overflow: hidden;
 }
 
-/* Custom scrollbar for chat messages */
+/* Space background animations */
+@keyframes move-background {
+  from {
+    transform: translate3d(0px, 0px, 0px);
+  }
+  to { 
+    transform: translate3d(1000px, 0px, 0px);
+  }
+}
+
+@keyframes twinkle {
+  0% { opacity: 0; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.2); }
+  100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes shooting-star {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-45deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-1500px) translateY(1500px) rotate(-45deg);
+    opacity: 0;
+  }
+}
+
+@keyframes shooting-star-right {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-45deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-1500px) translateY(1500px) rotate(-45deg);
+    opacity: 0;
+  }
+}
+
+@keyframes shooting-star-left {
+  0% {
+    transform: translateX(0) translateY(0) rotate(45deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(1500px) translateY(1500px) rotate(45deg);
+    opacity: 0;
+  }
+}
+
+@keyframes shooting-star-top {
+  0% {
+    transform: translateX(0) translateY(0) rotate(0deg);
+    opacity: 0;
+  }
+  5% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(0) translateY(1500px) rotate(0deg);
+    opacity: 0;
+  }
+}
+
+/* Star layers */
+.stars {
+  background: transparent;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.stars::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  animation: move-background 50s linear infinite;
+  background-image: 
+    radial-gradient(1px 1px at 25px 5px, white, rgba(255, 255, 255, 0)),
+    radial-gradient(1px 1px at 50px 25px, white, rgba(255, 255, 255, 0)),
+    radial-gradient(1px 1px at 125px 20px, white, rgba(255, 255, 255, 0)),
+    radial-gradient(1.5px 1.5px at 50px 75px, white, rgba(255, 255, 255, 0)),
+    radial-gradient(2px 2px at 15px 125px, white, rgba(255, 255, 255, 0)),
+    radial-gradient(2.5px 2.5px at 110px 80px, white, rgba(255, 255, 255, 0));
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+.stars2 {
+  z-index: 1;
+}
+
+.stars2::after {
+  background-image: 
+    radial-gradient(1px 1px at 75px 45px, #E8F8FF, rgba(255, 255, 255, 0)),
+    radial-gradient(1px 1px at 25px 150px, #E8F8FF, rgba(255, 255, 255, 0)),
+    radial-gradient(1.5px 1.5px at 175px 50px, #E8F8FF, rgba(255, 255, 255, 0)),
+    radial-gradient(2px 2px at 125px 100px, #E8F8FF, rgba(255, 255, 255, 0)),
+    radial-gradient(2.5px 2.5px at 50px 175px, #E8F8FF, rgba(255, 255, 255, 0));
+  animation: move-background 100s linear infinite;
+}
+
+.stars3 {
+  z-index: 2;
+}
+
+.stars3::after {
+  background-image: 
+    radial-gradient(1px 1px at 50px 25px, #CCE5FF, rgba(255, 255, 255, 0)),
+    radial-gradient(1px 1px at 100px 75px, #CCE5FF, rgba(255, 255, 255, 0)),
+    radial-gradient(1.5px 1.5px at 150px 125px, #CCE5FF, rgba(255, 255, 255, 0));
+  animation: move-background 150s linear infinite;
+}
+
+/* Twinkling stars */
+.twinkling-star {
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  background-color: white;
+  border-radius: 50%;
+  box-shadow: 0 0 3px #fff, 0 0 5px #fff;
+}
+
+.twinkling-star:nth-child(1) { top: 10%; left: 20%; animation: twinkle 3s infinite 0.5s; }
+.twinkling-star:nth-child(2) { top: 30%; left: 40%; animation: twinkle 3s infinite 1s; }
+.twinkling-star:nth-child(3) { top: 50%; left: 60%; animation: twinkle 3s infinite 1.5s; }
+.twinkling-star:nth-child(4) { top: 70%; left: 80%; animation: twinkle 3s infinite 2s; }
+.twinkling-star:nth-child(5) { top: 15%; left: 90%; animation: twinkle 3s infinite 2.5s; }
+
+/* Shooting stars */
+.shooting-star {
+  position: absolute;
+  width: 150px;
+  height: 2px;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  opacity: 0;
+  filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.8));
+}
+
+.shooting-star::before {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 
+    0 0 3px #fff,
+    0 0 6px #fff,
+    0 0 12px rgba(255, 255, 255, 0.8);
+  left: 0;
+  top: -2px;
+}
+
+.shooting-star::after {
+  content: '';
+  position: absolute;
+  width: 100px;
+  height: 1px;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.8) 0%, 
+    rgba(255, 255, 255, 0) 100%
+  );
+  left: -20px;
+  top: 0;
+  transform: rotate(45deg);
+  opacity: 0.4;
+}
+
+/* Right to left shooting stars */
+.shooting-star-right {
+  animation: shooting-star-right 6s linear infinite;
+}
+
+/* Left to right shooting stars */
+.shooting-star-left {
+  animation: shooting-star-left 6s linear infinite;
+}
+
+/* Top to bottom shooting stars */
+.shooting-star-top {
+  animation: shooting-star-top 6s linear infinite;
+}
+
+/* Fast shooting stars */
+.shooting-star:nth-child(1) { 
+  top: 15%; 
+  right: -150px;
+  animation: shooting-star-right 5s linear infinite;
+  animation-delay: 0s;
+}
+
+.shooting-star:nth-child(2) { 
+  top: 35%; 
+  left: -150px;
+  animation: shooting-star-left 7s linear infinite;
+  animation-delay: 2s;
+}
+
+.shooting-star:nth-child(3) { 
+  top: -50px;
+  left: 30%;
+  animation: shooting-star-top 6s linear infinite;
+  animation-delay: 4s;
+}
+
+/* Slow shooting stars */
+.shooting-star:nth-child(4) { 
+  top: 45%; 
+  right: -150px;
+  animation: shooting-star-right 12s linear infinite;
+  animation-delay: 1s;
+}
+
+.shooting-star:nth-child(5) { 
+  top: 65%; 
+  left: -150px;
+  animation: shooting-star-left 15s linear infinite;
+  animation-delay: 3s;
+}
+
+.shooting-star:nth-child(6) { 
+  top: -50px;
+  left: 60%;
+  animation: shooting-star-top 10s linear infinite;
+  animation-delay: 5s;
+}
+
+.shooting-star:nth-child(7) { 
+  top: 25%; 
+  right: -150px;
+  animation: shooting-star-right 18s linear infinite;
+  animation-delay: 7s;
+}
+
+/* Chat Interface Styles */
+.chat-interface {
+  position: relative;
+  z-index: 10;
+  background: rgba(13, 17, 23, 0.85);
+  backdrop-filter: blur(12px);
+  border-radius: 24px;
+  overflow: hidden;
+  box-shadow: 
+    0 0 20px rgba(66, 153, 225, 0.1),
+    0 0 40px rgba(66, 153, 225, 0.1),
+    inset 0 0 15px rgba(66, 153, 225, 0.2);
+}
+
+.chat-interface::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(
+    45deg,
+    rgba(66, 153, 225, 0.5),
+    rgba(129, 230, 217, 0.5),
+    rgba(66, 153, 225, 0.5)
+  );
+  border-radius: inherit;
+  z-index: -1;
+  animation: border-glow 4s linear infinite;
+}
+
+.chat-interface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    to bottom right,
+    transparent 30%,
+    rgba(66, 153, 225, 0.1),
+    transparent 70%
+  );
+  border-radius: inherit;
+}
+
+@keyframes border-glow {
+  0% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.002);
+  }
+  100% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+}
+
+/* Message Styles */
+.message-bubble {
+  position: relative;
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  max-width: 80%;
+  margin: 0.5rem;
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.message-bubble.user {
+  background: linear-gradient(
+    135deg,
+    rgba(66, 153, 225, 0.15) 0%,
+    rgba(129, 230, 217, 0.15) 100%
+  );
+  border-top-right-radius: 4px;
+  margin-left: auto;
+  color: #fff;
+}
+
+.message-bubble.assistant {
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.05) 0%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  border-top-left-radius: 4px;
+  margin-right: auto;
+  color: #fff;
+}
+
+/* Input area styles */
+.input-area {
+  background: rgba(13, 17, 23, 0.95);
+  border-top: 1px solid rgba(66, 153, 225, 0.2);
+  backdrop-filter: blur(12px);
+}
+
+.input-area textarea {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(66, 153, 225, 0.3);
+  border-radius: 12px;
+  color: #fff;
+  transition: all 0.3s ease;
+}
+
+.input-area textarea:focus {
+  border-color: rgba(66, 153, 225, 0.5);
+  box-shadow: 0 0 10px rgba(66, 153, 225, 0.2);
+  outline: none;
+}
+
+.input-area button {
+  background: linear-gradient(
+    135deg,
+    rgba(66, 153, 225, 0.8),
+    rgba(129, 230, 217, 0.8)
+  );
+  border-radius: 12px;
+  color: #fff;
+  transition: all 0.3s ease;
+}
+
+.input-area button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(66, 153, 225, 0.3);
+}
+
+/* Custom scrollbar */
 .overflow-y-auto::-webkit-scrollbar {
   width: 6px;
 }
@@ -37,35 +425,10 @@ body {
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb {
-  background: #888;
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 3px;
 }
 
 .overflow-y-auto::-webkit-scrollbar-thumb:hover {
-  background: #666;
-}
-
-/* Message bubble tail */
-.message-bubble::after {
-  content: '';
-  position: absolute;
-  width: 0;
-  height: 0;
-  border-style: solid;
-}
-
-.message-bubble.user::after {
-  border-width: 8px 0 8px 8px;
-  border-color: transparent transparent transparent var(--whatsapp-light-green);
-  right: -8px;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.message-bubble.assistant::after {
-  border-width: 8px 8px 8px 0;
-  border-color: transparent #fff transparent transparent;
-  left: -8px;
-  top: 50%;
-  transform: translateY(-50%);
+  background: rgba(255, 255, 255, 0.3);
 }

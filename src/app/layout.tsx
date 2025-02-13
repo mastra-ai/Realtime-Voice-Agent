@@ -24,10 +24,35 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen`}>
+        {/* Space background */}
+        <div className="fixed inset-0">
+          {/* Star layers */}
+          <div className="stars"></div>
+          <div className="stars2"></div>
+          <div className="stars3"></div>
+          
+          {/* Twinkling stars */}
+          <div className="twinkling-star"></div>
+          <div className="twinkling-star"></div>
+          <div className="twinkling-star"></div>
+          <div className="twinkling-star"></div>
+          <div className="twinkling-star"></div>
+
+          {/* Shooting stars */}
+          <div className="shooting-star"></div>
+          <div className="shooting-star"></div>
+          <div className="shooting-star"></div>
+          <div className="shooting-star"></div>
+          <div className="shooting-star"></div>
+          <div className="shooting-star"></div>
+          <div className="shooting-star"></div>
+        </div>
+        
+        {/* Main content */}
+        <div className="relative z-10">
+          {children}
+        </div>
       </body>
     </html>
   );
