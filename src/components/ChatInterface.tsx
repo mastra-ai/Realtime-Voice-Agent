@@ -51,9 +51,13 @@ export default function ChatInterface() {
       return;
     }
 
+    // Reset states
     setIsContinuous(true);
     setRecording(true);
     setError(null);
+    setRetryCount(0);
+
+    // Start fresh listening cycle
     startListeningCycle();
   };
 
@@ -69,13 +73,26 @@ export default function ChatInterface() {
       (error) => {
         console.error('Speech recognition error:', error);
         setRecording(false);
-        // setError(`Speech recognition error: ${error}`);
+        
+        // Attempt to restart on error if in continuous mode
+        if (isContinuous && !isAISpeaking && retryCount < maxRetries) {
+          setRetryCount(prev => prev + 1);
+          if (restartTimeoutRef.current) {
+            clearTimeout(restartTimeoutRef.current);
+          }
+          restartTimeoutRef.current = setTimeout(() => {
+            if (isContinuous) {
+              setRecording(true);
+              startListeningCycle();
+            }
+          }, 1000);
+        }
       },
       (newVolume) => {
         setVolume(newVolume);
       },
       () => {
-        // Silence detected
+        // Silence detected - only restart if we're still in continuous mode
         if (isContinuous && !isAISpeaking) {
           startListeningCycle();
         }
@@ -83,27 +100,12 @@ export default function ChatInterface() {
     );
   };
 
-  const handleStopRecording = () => {
-    setIsContinuous(false);
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
-    }
-    speechService.stopListening();
-    setRecording(false);
-    setVolume(0);
-  };
-
   const handleSendMessage = async (message: string) => {
-    // Stop listening while processing and during AI response
-    speechService.stopListening();
-    setRecording(false);
-    
-    addMessage({ role: 'user', content: message });
-    setProcessing(true);
-    setError(null);
-
     try {
+      addMessage({ role: 'user', content: message });
+      setProcessing(true);
+      setError(null);
+
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,20 +127,26 @@ export default function ChatInterface() {
         audio.onended = () => {
           setIsAISpeaking(false);
           if (isContinuous) {
-            // Add a delay before resuming listening to avoid picking up audio tail
-            restartTimeoutRef.current = setTimeout(() => {
-              if (isContinuous) {
-                setRecording(true);
-                startListeningCycle();
-              }
-            }, 1000); // 1 second delay
+            // Resume listening after AI finishes speaking
+            setRecording(true);
+            startListeningCycle();
           }
         };
 
-        audio.play().catch(error => {
+        await audio.play().catch(error => {
           console.error('Error playing audio:', error);
           setIsAISpeaking(false);
+          if (isContinuous) {
+            setRecording(true);
+            startListeningCycle();
+          }
         });
+      } else {
+        // If no audio response, continue listening immediately
+        if (isContinuous) {
+          setRecording(true);
+          startListeningCycle();
+        }
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -147,13 +155,28 @@ export default function ChatInterface() {
         role: 'assistant', 
         content: 'Sorry, I encountered an error processing your request.' 
       });
-    } finally {
-      setProcessing(false);
-      if (!isAISpeaking && isContinuous) {
+      
+      // Continue listening even after error
+      if (isContinuous) {
         setRecording(true);
         startListeningCycle();
       }
+    } finally {
+      setProcessing(false);
     }
+  };
+
+  const handleStopRecording = () => {
+    setIsContinuous(false);
+    setRecording(false);
+    setVolume(0);
+    
+    if (restartTimeoutRef.current) {
+      clearTimeout(restartTimeoutRef.current);
+      restartTimeoutRef.current = null;
+    }
+    
+    speechService.stopListening();
   };
 
   const formatTime = () => {

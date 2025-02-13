@@ -18,6 +18,9 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
   let analyser: AnalyserNode | null = null;
   let silenceTimeout: NodeJS.Timeout | null = null;
   let isListening = false;
+  let currentTranscript = '';
+  let silenceStart: number | null = null;
+  const SILENCE_THRESHOLD = 2000; 
 
   function initialize() {
     if (typeof window === 'undefined') {
@@ -77,20 +80,23 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
           onVolumeChange(volume);
         }
 
-        // Silence detection
+        // Silence detection with threshold
         if (volume < 10) {
-          if (!silenceTimeout && onSilence) {
-            silenceTimeout = setTimeout(() => {
+          if (!silenceStart) {
+            silenceStart = Date.now();
+          } else if (Date.now() - silenceStart >= SILENCE_THRESHOLD) {
+            if (onSilence && currentTranscript.trim()) {
               onSilence();
-              silenceTimeout = null;
-            }, 1500);
+              silenceStart = null;
+            }
           }
-        } else if (silenceTimeout) {
-          clearTimeout(silenceTimeout);
-          silenceTimeout = null;
+        } else {
+          silenceStart = null;
         }
 
-        requestAnimationFrame(checkVolume);
+        if (isListening) {
+          requestAnimationFrame(checkVolume);
+        }
       }
 
       requestAnimationFrame(checkVolume);
@@ -102,38 +108,64 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
   return {
     startListening: (onResult, onError, onVolumeChange, onSilence) => {
       try {
-        // Prevent multiple start calls
-        if (isListening) {
-          console.warn('Speech recognition is already running. Stopping previous instance.');
-          recognition?.stop();
-        }
-
         // Initialize or reset recognition
         recognition = initialize();
+        currentTranscript = '';
+        silenceStart = null;
 
         recognition.onresult = (event) => {
-          const transcript = Array.from(event.results)
-            .map(result => result[0].transcript)
-            .join('');
+          // Get only the latest result
+          const currentResult = event.results[event.results.length - 1];
+          const transcript = currentResult[0].transcript;
+          const isFinal = currentResult.isFinal;
           
-          const isFinal = event.results[0].isFinal;
-          onResult(transcript, isFinal);
+          if (isFinal) {
+            currentTranscript = transcript.trim();
+            // Only send result if we've detected sufficient silence
+            if (silenceStart && Date.now() - silenceStart >= SILENCE_THRESHOLD) {
+              onResult(currentTranscript, true);
+              currentTranscript = '';
+              silenceStart = null;
+            }
+          }
         };
 
         recognition.onerror = (event) => {
+          console.error('Speech recognition error:', event.error);
           onError(event.error);
-          
-          // Reset listening state
-          isListening = false;
+        
+        };
+
+        recognition.onend = () => {
+          console.log('Speech recognition ended');
+
+          if (isListening) {
+            try {
+              recognition?.start();
+            } catch (e) {
+              console.error('Error restarting recognition:', e);
+              isListening = false;
+              onError('Failed to restart recognition');
+            }
+          }
         };
 
         // Setup audio analysis
-        setupAudioAnalysis(onVolumeChange, onSilence);
+        setupAudioAnalysis(onVolumeChange, () => {
+          // Only trigger silence callback if we have content
+          if (currentTranscript.trim()) {
+            onResult(currentTranscript.trim(), true);
+            currentTranscript = '';
+            silenceStart = null;
+            if (onSilence) onSilence();
+          }
+        });
 
         // Start recognition
         recognition.start();
         isListening = true;
       } catch (error) {
+        console.error('Error starting recognition:', error);
         isListening = false;
         onError(error instanceof Error ? error.message : 'Unknown error');
       }
@@ -141,7 +173,10 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
 
     stopListening: () => {
       try {
+        isListening = false; 
+        
         if (recognition) {
+          recognition.onend = null; 
           recognition.stop();
         }
         
@@ -163,8 +198,6 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
           silenceTimeout = null;
         }
 
-        // Reset listening state
-        isListening = false;
       } catch (error) {
         console.error('Error stopping speech recognition:', error);
       }
