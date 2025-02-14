@@ -5,7 +5,8 @@ export interface ISpeechRecognitionService {
     onResult: (transcript: string, isFinal: boolean) => void,
     onError: (error: string) => void,
     onVolumeChange?: (volume: number) => void,
-    onSilence?: () => void
+    onSilence?: () => void,
+    deviceId?: string
   ) => void;
   stopListening: () => void;
   isSupported: () => boolean;
@@ -47,15 +48,22 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
     return recognition;
   }
 
-  async function setupAudioAnalysis(onVolumeChange?: (volume: number) => void, onSilence?: () => void) {
+  async function setupAudioAnalysis(
+    onVolumeChange?: (volume: number) => void, 
+    onSilence?: () => void,
+    deviceId?: string
+  ) {
     try {
       // Stop and clean up existing media stream
       if (mediaStream) {
         mediaStream.getTracks().forEach(track => track.stop());
       }
 
-      // Create new media stream
-      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Create new media stream with optional device constraint
+      const constraints = {
+        audio: deviceId ? { deviceId: { exact: deviceId } } : true
+      };
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       
       // Close existing audio context if any
       if (audioContext) {
@@ -106,7 +114,7 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
   }
 
   return {
-    startListening: (onResult, onError, onVolumeChange, onSilence) => {
+    startListening: (onResult, onError, onVolumeChange, onSilence, deviceId) => {
       try {
         // Initialize or reset recognition
         recognition = initialize();
@@ -159,7 +167,7 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
             silenceStart = null;
             if (onSilence) onSilence();
           }
-        });
+        }, deviceId);
 
         // Start recognition
         recognition.start();

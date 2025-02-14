@@ -5,6 +5,7 @@ import { SpeechRecognitionService } from '@/mastra/services/speechRecognition';
 import { useChatStore } from '@/store/chatStore';
 import { AiMessage } from './ui/AiMessage';
 import { motion } from 'framer-motion';
+import { DeviceSelector } from './ui/DeviceSelector';
 
 export default function ChatInterface() {
   const {
@@ -27,6 +28,26 @@ export default function ChatInterface() {
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string>();
+
+  useEffect(() => {
+    // Load saved device preference
+    const savedDeviceId = localStorage.getItem('preferredAudioDevice');
+    if (savedDeviceId) {
+      setSelectedDeviceId(savedDeviceId);
+    }
+  }, []);
+
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    localStorage.setItem('preferredAudioDevice', deviceId);
+    
+    // Restart recording if currently active
+    if (isRecording) {
+      speechService.stopListening();
+      startListeningCycle();
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -96,7 +117,8 @@ export default function ChatInterface() {
         if (isContinuous && !isAISpeaking) {
           startListeningCycle();
         }
-      }
+      },
+      selectedDeviceId
     );
   };
 
@@ -215,12 +237,11 @@ export default function ChatInterface() {
                 )}
               </div>
             </div>
-            <div className="flex items-center space-x-4">
-              <button className="text-white/80 hover:text-white transition-colors p-2">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-                  <path d="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.659 1.905h1.93l4.5 4.5c.945.945 2.561.276 2.561-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06z"/>
-                </svg>
-              </button>
+            <div className="flex items-center space-x-2">
+              <DeviceSelector
+                selectedDeviceId={selectedDeviceId}
+                onDeviceSelect={handleDeviceSelect}
+              />
               <button className="text-white/80 hover:text-white transition-colors p-2">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
                   <path fillRule="evenodd" d="M10.5 6a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm0 6a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0zm0 6a1.5 1.5 0 113 0 1.5 1.5 0 01-3 0z" clipRule="evenodd"/>
