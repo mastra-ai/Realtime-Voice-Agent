@@ -15,19 +15,22 @@ export function DeviceSelector({ onDeviceSelect, selectedDeviceId }: DeviceSelec
   const [isClosing, setIsClosing] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    async function getDevices() {
-      try {
+  const getDevices = async () => {
+    try {
+      // Only request microphone access when the dropdown is opened
+      if (devices.length === 0) {
         await navigator.mediaDevices.getUserMedia({ audio: true });
-        const deviceList = await navigator.mediaDevices.enumerateDevices();
-        const audioInputDevices = deviceList.filter(device => device.kind === 'audioinput');
-        setDevices(audioInputDevices);
-      } catch (error) {
-        console.error('Error accessing media devices:', error);
       }
+      const deviceList = await navigator.mediaDevices.enumerateDevices();
+      const audioInputDevices = deviceList.filter(device => device.kind === 'audioinput');
+      setDevices(audioInputDevices);
+    } catch (error) {
+      console.error('Error accessing media devices:', error);
     }
+  };
 
-    getDevices();
+  useEffect(() => {
+    // Only add the devicechange listener, don't request access yet
     navigator.mediaDevices.addEventListener('devicechange', getDevices);
     
     const handleClickOutside = (event: MouseEvent) => {
@@ -57,10 +60,17 @@ export function DeviceSelector({ onDeviceSelect, selectedDeviceId }: DeviceSelec
     handleClose();
   };
 
+  const handleOpen = async () => {
+    if (!isOpen) {
+      await getDevices(); // Get devices when opening the dropdown
+    }
+    setIsOpen(!isOpen);
+  };
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={handleOpen}
         className="text-white/80 hover:text-white transition-colors p-2"
         title="Select Microphone"
       >
