@@ -1,6 +1,6 @@
 'use client';
 
-// Add WebKit types
+
 declare global {
   interface Window {
     webkitSpeechRecognition: any;
@@ -166,9 +166,9 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
           }
         };
 
-        recognition.onerror = (event) => {
+        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
           // Only log errors that aren't from normal operation
-          if (event.error !== 'aborted' && event.error !== 'no-speech') {
+          if (event.error !== 'no-speech') {
             console.error('Speech recognition error:', event.error);
           }
           
@@ -181,12 +181,23 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
               onError('Network error occurred. Please check your internet connection.');
               break;
             case 'no-speech':
-            case 'aborted':
-              // Don't treat these as errors, they're part of normal operation
+            
+              break;
+            case 'audio-capture':
+              onError('No microphone was found or microphone is not working.');
+              break;
+            case 'bad-grammar':
+            case 'language-not-supported':
+              onError('Language configuration error occurred.');
+              break;
+            case 'service-not-allowed':
+              onError('Speech service is not allowed.');
               break;
             default:
-              if (event.error !== 'aborted') {
-                onError(`Recognition error: ${event.error}`);
+              // Handle any other errors without type checking
+              const errorType = (event as any).error;
+              if (errorType && errorType !== 'aborted') {
+                onError(`Recognition error occurred. Please try again.`);
               }
           }
         };
