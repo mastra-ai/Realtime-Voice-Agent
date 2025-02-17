@@ -2,14 +2,21 @@ import { motion } from 'framer-motion';
 import React from 'react';
 
 interface FuturisticMessageProps {
-  isAI: boolean;
-  content: string;
+  isAI?: boolean;
+  content?: string;
   avatar?: string;
   timestamp?: string;
+  message?: {
+    role: string;
+    content: string;
+  };
 }
 
-export function AiMessage({ isAI, content, avatar, timestamp }: FuturisticMessageProps) {
+export function AiMessage({ isAI, content, avatar, timestamp, message }: FuturisticMessageProps) {
   const chatLogo = '/images/V-logo.jpeg';
+
+  const messageContent = message?.content || content;
+  const isAssistant = message?.role === 'assistant' || isAI;
 
   return (
     <motion.div
@@ -17,10 +24,10 @@ export function AiMessage({ isAI, content, avatar, timestamp }: FuturisticMessag
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.2 }}
-      className={`flex ${isAI ? 'justify-start' : 'justify-end'} mb-1.5`}
+      className={`flex ${isAssistant ? 'justify-start' : 'justify-end'} mb-1.5`}
     >
-      <div className={`flex ${isAI ? 'flex-row' : 'flex-row-reverse'} items-start max-w-[85%] group`}>
-        {isAI && (
+      <div className={`flex ${isAssistant ? 'flex-row' : 'flex-row-reverse'} items-start max-w-[85%] group`}>
+        {isAssistant && (
           <div className="flex-shrink-0 w-8 h-8 rounded-full overflow-hidden mr-2">
             {avatar ? (
               <img 
@@ -39,14 +46,14 @@ export function AiMessage({ isAI, content, avatar, timestamp }: FuturisticMessag
           </div>
         )}
         <div
-          className={`relative px-2 py-1.5 rounded-lg shadow-wa ${
-            isAI 
+          className={`relative px-3 py-2 rounded-lg shadow-wa ${
+            isAssistant 
               ? 'bg-wa-incoming rounded-tl-none' 
               : 'bg-wa-outgoing rounded-tr-none'
           }`}
         >
           <div className="relative z-10">
-            <p className="text-[0.9375rem] text-wa-text">{content}</p>
+            <p className="text-[0.9375rem] text-wa-text whitespace-pre-wrap">{messageContent}</p>
             {timestamp && (
               <span className="text-[0.6875rem] text-wa-secondary float-right ml-2 mt-1">
                 {timestamp}

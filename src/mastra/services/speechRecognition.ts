@@ -1,5 +1,13 @@
 'use client';
 
+// Add WebKit types
+declare global {
+  interface Window {
+    webkitSpeechRecognition: any;
+    webkitAudioContext: typeof AudioContext;
+  }
+}
+
 export interface ISpeechRecognitionService {
   startListening: (
     onResult: (transcript: string, isFinal: boolean) => void,
@@ -21,7 +29,9 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
   let isListening = false;
   let currentTranscript = '';
   let silenceStart: number | null = null;
-  const SILENCE_THRESHOLD = 2000; 
+  let lastProcessedTime = 0;
+  const SILENCE_THRESHOLD = 2000;
+  const DUPLICATE_THRESHOLD = 1000;
 
   function initialize() {
     if (typeof window === 'undefined') {
@@ -32,17 +42,24 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
       window.SpeechRecognition || window.webkitSpeechRecognition;
     
     if (!SpeechRecognitionConstructor) {
-      throw new Error('Speech recognition not supported');
+      throw new Error('Speech recognition not supported in this browser');
     }
 
-    // Stop any existing recognition before creating a new one
     if (recognition) {
-      recognition.stop();
+      try {
+        recognition.abort();
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+      } catch (e) {
+        console.error('Error stopping existing recognition:', e);
+      }
     }
 
     recognition = new SpeechRecognitionConstructor();
     recognition.continuous = true;
     recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
     recognition.lang = 'en-US';
 
     return recognition;
@@ -54,31 +71,31 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
     deviceId?: string
   ) {
     try {
-      // Stop and clean up existing media stream
       if (mediaStream) {
         mediaStream.getTracks().forEach(track => track.stop());
       }
 
-      // Create new media stream with optional device constraint
       const constraints = {
-        audio: deviceId ? { deviceId: { exact: deviceId } } : true
+        audio: deviceId 
+          ? { deviceId: { exact: deviceId } }
+          : true
       };
-      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
       
-      // Close existing audio context if any
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+
       if (audioContext) {
         audioContext.close();
       }
 
-      audioContext = new AudioContext();
+      audioContext = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(mediaStream);
       source.connect(analyser);
       analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.2;
 
-      // Volume monitoring
       function checkVolume() {
-        if (!analyser) return;
+        if (!analyser || !isListening) return;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
@@ -88,14 +105,15 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
           onVolumeChange(volume);
         }
 
-        // Silence detection with threshold
-        if (volume < 10) {
+        if (volume < 5) {
           if (!silenceStart) {
             silenceStart = Date.now();
           } else if (Date.now() - silenceStart >= SILENCE_THRESHOLD) {
-            if (onSilence && currentTranscript.trim()) {
+            if (onSilence && currentTranscript.trim() && 
+                Date.now() - lastProcessedTime >= DUPLICATE_THRESHOLD) {
               onSilence();
               silenceStart = null;
+              currentTranscript = '';
             }
           }
         } else {
@@ -110,45 +128,73 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
       requestAnimationFrame(checkVolume);
     } catch (error) {
       console.error('Audio analysis setup failed:', error);
+      throw error;
     }
   }
 
   return {
-    startListening: (onResult, onError, onVolumeChange, onSilence, deviceId) => {
+    startListening: async (onResult, onError, onVolumeChange, onSilence, deviceId) => {
       try {
-        // Initialize or reset recognition
+        // Stop any existing recognition
+        if (recognition) {
+          recognition.stop();
+        }
+
+        // Initialize new recognition
         recognition = initialize();
         currentTranscript = '';
         silenceStart = null;
+        lastProcessedTime = 0;
+        isListening = true;
 
         recognition.onresult = (event) => {
-          // Get only the latest result
-          const currentResult = event.results[event.results.length - 1];
-          const transcript = currentResult[0].transcript;
-          const isFinal = currentResult.isFinal;
-          
-          if (isFinal) {
-            currentTranscript = transcript.trim();
-            // Only send result if we've detected sufficient silence
-            if (silenceStart && Date.now() - silenceStart >= SILENCE_THRESHOLD) {
-              onResult(currentTranscript, true);
-              currentTranscript = '';
-              silenceStart = null;
+          const result = event.results[event.results.length - 1];
+          const transcript = result[0].transcript.trim();
+          const isFinal = result.isFinal;
+
+          if (transcript) {
+            if (isFinal) {
+              if (Date.now() - lastProcessedTime >= DUPLICATE_THRESHOLD) {
+                onResult(transcript, true);
+                lastProcessedTime = Date.now();
+                currentTranscript = '';
+                silenceStart = null;
+              }
+            } else {
+              currentTranscript = transcript;
             }
           }
         };
 
         recognition.onerror = (event) => {
-          console.error('Speech recognition error:', event.error);
-          onError(event.error);
-        
+          // Only log errors that aren't from normal operation
+          if (event.error !== 'aborted' && event.error !== 'no-speech') {
+            console.error('Speech recognition error:', event.error);
+          }
+          
+          switch (event.error) {
+            case 'not-allowed':
+              onError('Microphone access denied. Please grant permission to use the microphone.');
+              isListening = false;
+              break;
+            case 'network':
+              onError('Network error occurred. Please check your internet connection.');
+              break;
+            case 'no-speech':
+            case 'aborted':
+              // Don't treat these as errors, they're part of normal operation
+              break;
+            default:
+              if (event.error !== 'aborted') {
+                onError(`Recognition error: ${event.error}`);
+              }
+          }
         };
 
         recognition.onend = () => {
-          console.log('Speech recognition ended');
-
           if (isListening) {
             try {
+              // Don't reinitialize, just restart if we're still supposed to be listening
               recognition?.start();
             } catch (e) {
               console.error('Error restarting recognition:', e);
@@ -158,62 +204,70 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
           }
         };
 
-        // Setup audio analysis
-        setupAudioAnalysis(onVolumeChange, () => {
-          // Only trigger silence callback if we have content
-          if (currentTranscript.trim()) {
-            onResult(currentTranscript.trim(), true);
-            currentTranscript = '';
-            silenceStart = null;
-            if (onSilence) onSilence();
+        await setupAudioAnalysis(onVolumeChange, () => {
+          if (currentTranscript.trim() && 
+              Date.now() - lastProcessedTime >= DUPLICATE_THRESHOLD) {
+            if (onSilence) {
+              onSilence();
+              silenceStart = null;
+              currentTranscript = '';
+            }
           }
         }, deviceId);
 
-        // Start recognition
         recognition.start();
-        isListening = true;
       } catch (error) {
         console.error('Error starting recognition:', error);
         isListening = false;
-        onError(error instanceof Error ? error.message : 'Unknown error');
+        if (error instanceof Error) {
+          onError(error.message.includes('permission') 
+            ? 'Please grant microphone permission to use voice input' 
+            : error.message);
+        } else {
+          onError('Failed to start voice recognition');
+        }
       }
     },
 
     stopListening: () => {
       try {
-        isListening = false; 
-        
+        isListening = false;
+
         if (recognition) {
-          recognition.onend = null; 
-          recognition.stop();
+          recognition.onend = null;
+          recognition.abort();
+          recognition = null;
         }
-        
-        // Clean up media stream
+
         if (mediaStream) {
           mediaStream.getTracks().forEach(track => track.stop());
           mediaStream = null;
         }
 
-        // Close audio context
         if (audioContext) {
           audioContext.close();
           audioContext = null;
         }
 
-        // Clear silence timeout
         if (silenceTimeout) {
           clearTimeout(silenceTimeout);
           silenceTimeout = null;
         }
 
+        currentTranscript = '';
+        silenceStart = null;
+        lastProcessedTime = 0;
       } catch (error) {
-        console.error('Error stopping speech recognition:', error);
+        console.error('Error stopping recognition:', error);
       }
     },
 
     isSupported: () => {
-      return typeof window !== 'undefined' && 
-             !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+      try {
+        return !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+      } catch {
+        return false;
+      }
     }
   };
 }
