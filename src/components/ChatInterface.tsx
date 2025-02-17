@@ -6,6 +6,7 @@ import { useChatStore } from '@/store/chatStore';
 import { AiMessage } from './ui/AiMessage';
 import { motion } from 'framer-motion';
 import { DeviceSelector } from './ui/DeviceSelector';
+import { BsMicFill } from 'react-icons/bs';
 
 export default function ChatInterface() {
   const {
@@ -267,7 +268,7 @@ export default function ChatInterface() {
 
       {/* Chat Messages */}
       <div 
-        className="flex-1 overflow-y-auto relative z-10"
+        className="flex-grow overflow-y-auto p-4 space-y-4"
         style={{ 
           background: `
             linear-gradient(0deg, rgba(229, 221, 213, 0.95), rgba(229, 221, 213, 0.95)),
@@ -275,7 +276,23 @@ export default function ChatInterface() {
           `
         }}
       >
-        <div className="max-w-4xl mx-auto py-4 px-4 space-y-1">
+        <div className="max-w-4xl mx-auto">
+          {messages.length === 0 && (
+            <>
+            <div className="flex flex-col items-center justify-center text-center space-y-4 mt-12">
+                <div className="w-16 h-16 rounded-full bg-[#DCF8C6]/30 flex items-center justify-center">
+                  <BsMicFill className="w-8 h-8 text-[#128C7E]" />
+                </div>
+                <div className="max-w-sm">
+                  <h3 className="text-[#075E54] font-medium mb-2">Welcome to Mastra AI</h3>
+                  <p className="text-sm text-gray-600">
+                    Start a voice conversation by clicking the microphone button below. I'm here to assist you with anything you need.
+                  </p>
+                </div>
+              </div>
+            </>
+          )}
+
           {messages.map((message, index) => (
             <AiMessage
               key={index}
