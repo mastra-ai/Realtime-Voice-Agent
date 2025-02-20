@@ -6,7 +6,7 @@ const ttsService = createTTSService();
 
 export async function POST(req: Request) {
   try {
-    const { message } = await req.json();
+    const { message, voiceId } = await req.json();
 
     if (!message) {
       return new NextResponse(JSON.stringify({ error: 'No message provided' }), {
@@ -35,7 +35,7 @@ export async function POST(req: Request) {
     // Get audio stream from TTS
     let audioStream;
     try {
-      audioStream = await ttsService.streamAudio(response);
+      audioStream = await ttsService.streamAudio(response, voiceId);
     } catch (ttsError) {
       console.error('TTS Streaming Error:', ttsError);
       return new NextResponse(JSON.stringify({ 

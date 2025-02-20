@@ -6,6 +6,7 @@ import { useChatStore } from '@/store/chatStore';
 import { AiMessage } from './ui/AiMessage';
 import { motion } from 'framer-motion';
 import { DeviceSelector } from './ui/DeviceSelector';
+import { VoiceSelector } from './ui/VoiceSelector';
 import { BsMicFill } from 'react-icons/bs';
 
 export default function ChatInterface() {
@@ -30,12 +31,17 @@ export default function ChatInterface() {
   const [retryCount, setRetryCount] = useState(0);
   const maxRetries = 3;
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>();
+  const [selectedVoiceId, setSelectedVoiceId] = useState<string>();
 
   useEffect(() => {
-    // Load saved device preference
+    // Load saved preferences
     const savedDeviceId = localStorage.getItem('preferredAudioDevice');
+    const savedVoiceId = localStorage.getItem('preferredVoiceId');
     if (savedDeviceId) {
       setSelectedDeviceId(savedDeviceId);
+    }
+    if (savedVoiceId) {
+      setSelectedVoiceId(savedVoiceId);
     }
   }, []);
 
@@ -48,6 +54,11 @@ export default function ChatInterface() {
       speechService.stopListening();
       startListeningCycle();
     }
+  };
+
+  const handleVoiceSelect = (voiceId: string) => {
+    setSelectedVoiceId(voiceId);
+    localStorage.setItem('preferredVoiceId', voiceId);
   };
 
   const scrollToBottom = () => {
@@ -71,19 +82,18 @@ export default function ChatInterface() {
     speechService.stopListening();
   };
 
-  const handleStartRecording = () => {
+  const handleStartRecording = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    
     if (!speechService.isSupported()) {
       setError('Speech recognition is not supported in your browser');
       return;
     }
 
-    // Reset states
     setIsContinuous(true);
     setRecording(true);
     setError(null);
     setRetryCount(0);
-
-    // Start fresh listening cycle
     startListeningCycle();
   };
 
@@ -129,23 +139,27 @@ export default function ChatInterface() {
     );
   };
 
-  const handleSendMessage = async (message: string) => {
+  const handleSendMessage = async (text: string) => {
     try {
-      addMessage({ role: 'user', content: message });
       setProcessing(true);
-      setError(null);
+      addMessage({ role: 'user', content: text });
 
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          message: text,
+          voiceId: selectedVoiceId
+        }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.details || data.error || 'Unknown error occurred');
+        throw new Error('Network response was not ok');
       }
+
+      const data = await response.json();
 
       addMessage({ role: 'assistant', content: data.text });
 
@@ -272,6 +286,10 @@ export default function ChatInterface() {
                   <DeviceSelector
                     selectedDeviceId={selectedDeviceId}
                     onDeviceSelect={handleDeviceSelect}
+                  />
+                  <VoiceSelector
+                    selectedVoiceId={selectedVoiceId || ''}
+                    onVoiceSelect={handleVoiceSelect}
                   />
                 </div>
               </div>
