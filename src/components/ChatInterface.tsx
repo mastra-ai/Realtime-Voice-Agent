@@ -74,12 +74,11 @@ export default function ChatInterface() {
     setRecording(false);
     setVolume(0);
     
-    if (restartTimeoutRef.current) {
-      clearTimeout(restartTimeoutRef.current);
-      restartTimeoutRef.current = null;
+    try {
+      speechService.stopListening();
+    } catch (error) {
+      console.error('Error stopping recording:', error);
     }
-    
-    speechService.stopListening();
   };
 
   const handleStartRecording = (e: React.MouseEvent) => {
@@ -100,43 +99,55 @@ export default function ChatInterface() {
   const startListeningCycle = () => {
     if (isAISpeaking) return;
 
-    speechService.startListening(
-      (transcript, isFinal) => {
-        if (isFinal && transcript.trim()) { 
-          handleSendMessage(transcript);
-        }
-      },
-      (error) => {
-        console.error('Speech recognition error:', error);
-        setRecording(false);
-        setError(error);
-        
-        // Attempt to restart on error if in continuous mode
-        if (isContinuous && !isAISpeaking && retryCount < maxRetries) {
-          setRetryCount(prev => prev + 1);
-          if (restartTimeoutRef.current) {
-            clearTimeout(restartTimeoutRef.current);
+    try {
+      // Reset error state before starting
+      setError(null);
+      
+      speechService.startListening(
+        (transcript, isFinal) => {
+          if (isFinal && transcript.trim()) { 
+            handleSendMessage(transcript);
           }
-          restartTimeoutRef.current = setTimeout(() => {
-            if (isContinuous) {
-              setError(null);
-              setRecording(true);
-              startListeningCycle();
+        },
+        (error) => {
+          console.error('Speech recognition error:', error);
+          
+          if (error.includes('refresh')) {
+            // Critical error - stop continuous mode
+            setIsContinuous(false);
+            setRecording(false);
+          } else {
+            // For non-critical errors, just show the error
+            setError(error);
+            
+            // Auto-restart after a brief delay
+            if (isContinuous && !isAISpeaking) {
+              setTimeout(() => {
+                if (isContinuous) {
+                  setError(null);
+                  setRecording(true);
+                  startListeningCycle();
+                }
+              }, 1000);
             }
-          }, 1000);
-        }
-      },
-      (newVolume) => {
-        setVolume(newVolume);
-      },
-      () => {
-        // Silence detected - only restart if we're still in continuous mode
-        if (isContinuous && !isAISpeaking) {
-          startListeningCycle();
-        }
-      },
-      selectedDeviceId
-    );
+          }
+        },
+        (newVolume) => {
+          setVolume(newVolume);
+        },
+        () => {
+          if (isContinuous && !isAISpeaking) {
+            startListeningCycle();
+          }
+        },
+        selectedDeviceId
+      );
+    } catch (error) {
+      console.error('Failed to start listening cycle:', error);
+      setError('Failed to start voice recognition. Please refresh the page.');
+      setIsContinuous(false);
+      setRecording(false);
+    }
   };
 
   const handleSendMessage = async (text: string) => {
@@ -167,10 +178,14 @@ export default function ChatInterface() {
         setIsAISpeaking(true);
         const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
         
+        // Add event listener for when audio starts playing
+        audio.onplay = () => {
+          setIsAISpeaking(true);
+        };
+        
         audio.onended = () => {
           setIsAISpeaking(false);
           if (isContinuous) {
-            // Resume listening after AI finishes speaking
             setRecording(true);
             startListeningCycle();
           }
@@ -185,7 +200,6 @@ export default function ChatInterface() {
           }
         });
       } else {
-        // If no audio response, continue listening immediately
         if (isContinuous) {
           setRecording(true);
           startListeningCycle();
@@ -199,7 +213,6 @@ export default function ChatInterface() {
         content: 'Sorry, I encountered an error processing your request.' 
       });
       
-      // Continue listening even after error
       if (isContinuous) {
         setRecording(true);
         startListeningCycle();

@@ -1,6 +1,8 @@
 'use client';
 
-
+/**
+ * Global interface for the window object to include webkitSpeechRecognition and webkitAudioContext.
+ */
 declare global {
   interface Window {
     webkitSpeechRecognition: any;
@@ -8,6 +10,9 @@ declare global {
   }
 }
 
+/**
+ * Interface for the SpeechRecognitionService.
+ */
 export interface ISpeechRecognitionService {
   startListening: (
     onResult: (transcript: string, isFinal: boolean) => void,
@@ -20,6 +25,9 @@ export interface ISpeechRecognitionService {
   isSupported: () => boolean;
 }
 
+/**
+ * SpeechRecognitionService class.
+ */
 export function SpeechRecognitionService(): ISpeechRecognitionService {
   let recognition: SpeechRecognition | null = null;
   let mediaStream: MediaStream | null = null;
@@ -30,9 +38,18 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
   let currentTranscript = '';
   let silenceStart: number | null = null;
   let lastProcessedTime = 0;
-  const SILENCE_THRESHOLD = 2000;
-  const DUPLICATE_THRESHOLD = 1000;
+  let baselineVolume = 0;
+  const SILENCE_THRESHOLD = 1500; 
+  const DUPLICATE_THRESHOLD = 800;
+  const CALIBRATION_DURATION = 1000;
+  const MIN_VOLUME_THRESHOLD = 3; 
+  const VOLUME_MULTIPLIER = 1.5; 
+  const REINIT_INTERVAL = 30000; 
+  let lastInitTime = 0;
 
+  /**
+   * Initialize the speech recognition.
+   */
   function initialize() {
     if (typeof window === 'undefined') {
       throw new Error('Speech recognition only works in browser');
@@ -65,6 +82,12 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
     return recognition;
   }
 
+  /**
+   * Set up audio analysis.
+   * @param onVolumeChange - callback for volume change
+   * @param onSilence - callback for silence
+   * @param deviceId - device ID
+   */
   async function setupAudioAnalysis(
     onVolumeChange?: (volume: number) => void, 
     onSilence?: () => void,
@@ -76,9 +99,28 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
       }
 
       const constraints = {
-        audio: deviceId 
-          ? { deviceId: { exact: deviceId } }
-          : true
+        audio: {
+          deviceId: deviceId ? { exact: deviceId } : undefined,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+          // advanced constraints for better sensitivity
+          advanced: [{
+            autoGainControl: {
+              ideal: true,
+              exact: true
+            },
+            channelCount: {
+              ideal: 1
+            },
+            sampleRate: {
+              ideal: 48000
+            },
+            sampleSize: {
+              ideal: 16
+            }
+          }]
+        }
       };
       
       mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -90,22 +132,39 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
       audioContext = new (window.AudioContext || window.webkitAudioContext)();
       analyser = audioContext.createAnalyser();
       const source = audioContext.createMediaStreamSource(mediaStream);
-      source.connect(analyser);
+
+      // Add a gain node to amplify the audio
+      const gainNode = audioContext.createGain();
+      gainNode.gain.value = VOLUME_MULTIPLIER;
+      
+      source.connect(gainNode);
+      gainNode.connect(analyser);
+      
       analyser.fftSize = 2048;
-      analyser.smoothingTimeConstant = 0.2;
+      analyser.smoothingTimeConstant = 0.1; 
+      analyser.minDecibels = -90; // Increased sensitivity to quiet sounds
+      analyser.maxDecibels = -10; // Adjusted for better dynamic range
+
+      // Calibrate baseline volume
+      await calibrateBaselineVolume();
 
       function checkVolume() {
         if (!analyser || !isListening) return;
 
         const dataArray = new Uint8Array(analyser.frequencyBinCount);
         analyser.getByteFrequencyData(dataArray);
-        const volume = dataArray.reduce((a, b) => a + b) / dataArray.length;
+        
+        // Calculate volume with emphasis on quieter sounds
+        const volume = Math.pow(dataArray.reduce((a, b) => a + b) / dataArray.length, 0.7);
 
         if (onVolumeChange) {
           onVolumeChange(volume);
         }
 
-        if (volume < 5) {
+        // Use more sensitive threshold
+        const dynamicThreshold = Math.max(MIN_VOLUME_THRESHOLD, baselineVolume * 0.8);
+
+        if (volume < dynamicThreshold) {
           if (!silenceStart) {
             silenceStart = Date.now();
           } else if (Date.now() - silenceStart >= SILENCE_THRESHOLD) {
@@ -132,19 +191,103 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
     }
   }
 
+  /**
+   * Calibrate baseline volume.
+   */
+  async function calibrateBaselineVolume(): Promise<void> {
+    if (!analyser) return;
+
+    return new Promise((resolve) => {
+      const samples: number[] = [];
+      let startTime = Date.now();
+
+      function sampleVolume() {
+        if (!analyser) return;
+
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(dataArray);
+        // Use the same volume calculation as in checkVolume
+        const volume = Math.pow(dataArray.reduce((a, b) => a + b) / dataArray.length, 0.7);
+        samples.push(volume);
+
+        if (Date.now() - startTime < CALIBRATION_DURATION) {
+          requestAnimationFrame(sampleVolume);
+        } else {
+          // Calculate baseline using a lower percentile for better sensitivity
+          samples.sort((a, b) => a - b);
+          const lowerQuartileIndex = Math.floor(samples.length * 0.15); // Using 15th percentile
+          const lowerQuartileSamples = samples.slice(0, lowerQuartileIndex);
+          baselineVolume = Math.max(
+            MIN_VOLUME_THRESHOLD,
+            lowerQuartileSamples.reduce((a, b) => a + b, 0) / lowerQuartileSamples.length
+          );
+          resolve();
+        }
+      }
+
+      requestAnimationFrame(sampleVolume);
+    });
+  }
+
+  async function forceReinitialize() {
+    try {
+      // Stop current recognition
+      if (recognition) {
+        recognition.onend = null; // Prevent auto-restart
+        recognition.abort();
+        recognition = null;
+      }
+
+      // Clean up audio context
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => {
+          track.stop();
+        });
+        mediaStream = null;
+      }
+
+      if (audioContext?.state !== 'closed') {
+        await audioContext?.close();
+      }
+      audioContext = null;
+      analyser = null;
+
+      // Reset all state
+      currentTranscript = '';
+      silenceStart = null;
+      lastProcessedTime = 0;
+      baselineVolume = 0;
+      
+      // Update last init time
+      lastInitTime = Date.now();
+
+      return initialize();
+    } catch (error) {
+      console.error('Error during reinitialization:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Start listening.
+   * @param onResult - callback for result
+   * @param onError - callback for error
+   * @param onVolumeChange - callback for volume change
+   * @param onSilence - callback for silence
+   * @param deviceId - device ID
+   */
   return {
     startListening: async (onResult, onError, onVolumeChange, onSilence, deviceId) => {
       try {
-        // Stop any existing recognition
-        if (recognition) {
-          recognition.stop();
+        // Check if we need to reinitialize
+        if (Date.now() - lastInitTime > REINIT_INTERVAL) {
+          console.log('Performing periodic reinitialization');
+          recognition = await forceReinitialize();
+        } else if (!recognition) {
+          recognition = initialize();
+          lastInitTime = Date.now();
         }
 
-        // Initialize new recognition
-        recognition = initialize();
-        currentTranscript = '';
-        silenceStart = null;
-        lastProcessedTime = 0;
         isListening = true;
 
         recognition.onresult = (event) => {
@@ -166,47 +309,35 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
           }
         };
 
-        recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-          // Only log errors that aren't from normal operation
-          if (event.error !== 'no-speech') {
-            console.error('Speech recognition error:', event.error);
-          }
+        recognition.onerror = async (event: SpeechRecognitionErrorEvent) => {
+          console.error('Speech recognition error:', event.error);
           
-          switch (event.error) {
-            case 'not-allowed':
-              onError('Microphone access denied. Please grant permission to use the microphone.');
+          // For any error, try to reinitialize
+          if (event.error !== 'no-speech') {
+            try {
+              recognition = await forceReinitialize();
+              recognition.start();
+              return;
+            } catch (reinitError) {
+              console.error('Reinitialization failed:', reinitError);
+              onError('Recognition error occurred. Please refresh the page.');
               isListening = false;
-              break;
-            case 'network':
-              onError('Network error occurred. Please check your internet connection.');
-              break;
-            case 'no-speech':
-            
-              break;
-            case 'audio-capture':
-              onError('No microphone was found or microphone is not working.');
-              break;
-            case 'bad-grammar':
-            case 'language-not-supported':
-              onError('Language configuration error occurred.');
-              break;
-            case 'service-not-allowed':
-              onError('Speech service is not allowed.');
-              break;
-            default:
-              // Handle any other errors without type checking
-              const errorType = (event as any).error;
-              if (errorType && errorType !== 'aborted') {
-                onError(`Recognition error occurred. Please try again.`);
-              }
+            }
           }
         };
 
         recognition.onend = () => {
           if (isListening) {
             try {
-              // Don't reinitialize, just restart if we're still supposed to be listening
-              recognition?.start();
+              // Check if we need to reinitialize before restarting
+              if (Date.now() - lastInitTime > REINIT_INTERVAL) {
+                forceReinitialize().then(newRecognition => {
+                  recognition = newRecognition;
+                  recognition.start();
+                });
+              } else {
+                recognition?.start();
+              }
             } catch (e) {
               console.error('Error restarting recognition:', e);
               isListening = false;
@@ -215,17 +346,7 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
           }
         };
 
-        await setupAudioAnalysis(onVolumeChange, () => {
-          if (currentTranscript.trim() && 
-              Date.now() - lastProcessedTime >= DUPLICATE_THRESHOLD) {
-            if (onSilence) {
-              onSilence();
-              silenceStart = null;
-              currentTranscript = '';
-            }
-          }
-        }, deviceId);
-
+        await setupAudioAnalysis(onVolumeChange, onSilence, deviceId);
         recognition.start();
       } catch (error) {
         console.error('Error starting recognition:', error);
@@ -240,7 +361,7 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
       }
     },
 
-    stopListening: () => {
+    stopListening: async () => {
       try {
         isListening = false;
 
@@ -251,14 +372,17 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
         }
 
         if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
+          mediaStream.getTracks().forEach(track => {
+            track.stop();
+          });
           mediaStream = null;
         }
 
-        if (audioContext) {
-          audioContext.close();
-          audioContext = null;
+        if (audioContext?.state !== 'closed') {
+          await audioContext?.close();
         }
+        audioContext = null;
+        analyser = null;
 
         if (silenceTimeout) {
           clearTimeout(silenceTimeout);
