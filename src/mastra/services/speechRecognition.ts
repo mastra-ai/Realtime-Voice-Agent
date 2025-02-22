@@ -312,16 +312,21 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
         recognition.onerror = async (event: SpeechRecognitionErrorEvent) => {
           console.error('Speech recognition error:', event.error);
           
+          // Only report errors if we're still meant to be listening
+          if (!isListening) return;
+          
           // For any error, try to reinitialize
-          if (event.error !== 'no-speech') {
+          if (event.error !== 'no-speech' && event.error !== 'aborted') {
             try {
               recognition = await forceReinitialize();
               recognition.start();
               return;
             } catch (reinitError) {
               console.error('Reinitialization failed:', reinitError);
-              onError('Recognition error occurred. Please refresh the page.');
-              isListening = false;
+              if (isListening) {
+                onError('Recognition error occurred. Please refresh the page.');
+                isListening = false;
+              }
             }
           }
         };
@@ -332,16 +337,20 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
               // Check if we need to reinitialize before restarting
               if (Date.now() - lastInitTime > REINIT_INTERVAL) {
                 forceReinitialize().then(newRecognition => {
-                  recognition = newRecognition;
-                  recognition.start();
+                  if (isListening) {
+                    recognition = newRecognition;
+                    recognition.start();
+                  }
                 });
               } else {
                 recognition?.start();
               }
             } catch (e) {
               console.error('Error restarting recognition:', e);
-              isListening = false;
-              onError('Failed to restart recognition');
+              if (isListening) {
+                isListening = false;
+                onError('Failed to restart recognition');
+              }
             }
           }
         };
@@ -350,6 +359,8 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
         recognition.start();
       } catch (error) {
         console.error('Error starting recognition:', error);
+        if (!isListening) return; // Don't show errors if we're not supposed to be listening
+        
         isListening = false;
         if (error instanceof Error) {
           onError(error.message.includes('permission') 

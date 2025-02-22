@@ -69,15 +69,14 @@ export default function ChatInterface() {
     scrollToBottom();
   }, [messages]);
 
-  const handleStopRecording = () => {
-    setIsContinuous(false);
-    setRecording(false);
-    setVolume(0);
-    
+  const stopListening = async () => {
     try {
-      speechService.stopListening();
+      setRecording(false);
+      setIsContinuous(false);
+      await speechService.stopListening();
+      setError(null);
     } catch (error) {
-      console.error('Error stopping recording:', error);
+      console.error('Error stopping recognition:', error);
     }
   };
 
@@ -235,7 +234,7 @@ export default function ChatInterface() {
 
   useEffect(() => {
     return () => {
-      handleStopRecording();
+      stopListening();
     };
   }, []);
 
@@ -515,7 +514,7 @@ export default function ChatInterface() {
               <div className="max-w-4xl mx-auto px-6 py-6">
                 <div className="flex justify-center items-center">
                   <motion.button
-                    onClick={isRecording ? handleStopRecording : handleStartRecording}
+                    onClick={isRecording ? stopListening : handleStartRecording}
                     disabled={isProcessing || isAISpeaking}
                     className={`w-16 h-16 rounded-full ${
                       isRecording 
