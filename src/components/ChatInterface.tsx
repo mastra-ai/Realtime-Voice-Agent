@@ -71,6 +71,7 @@ export default function ChatInterface() {
 
   const stopListening = async () => {
     try {
+      console.log(`Stopping recognition`)
       setRecording(false);
       setIsContinuous(false);
       await speechService.stopListening();
@@ -96,6 +97,7 @@ export default function ChatInterface() {
   };
 
   const startListeningCycle = () => {
+    console.log(`Start listening cycle`, { isContinuous })
     if (isAISpeaking) return;
 
     try {
@@ -105,6 +107,7 @@ export default function ChatInterface() {
       speechService.startListening(
         (transcript, isFinal) => {
           if (isFinal && transcript.trim()) { 
+            console.log(`Final transcript`, { isContinuous })
             handleSendMessage(transcript);
           }
         },
@@ -152,6 +155,10 @@ export default function ChatInterface() {
   const handleSendMessage = async (text: string) => {
     try {
       setProcessing(true);
+      console.log(`Sending message`, { isContinuous  });
+      speechService.stopListening();
+      setRecording(false);
+
       addMessage({ role: 'user', content: text });
 
       const response = await fetch('/api/chat', {
@@ -176,8 +183,7 @@ export default function ChatInterface() {
       if (data.audio) {
         setIsAISpeaking(true);
         const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
-        
-        // Add event listener for when audio starts playing
+
         audio.onplay = () => {
           setIsAISpeaking(true);
         };
@@ -233,10 +239,15 @@ export default function ChatInterface() {
   const AILogo = '/images/V-logo.jpeg'; 
 
   useEffect(() => {
+    if (isContinuous) {
+      startListeningCycle();
+    } else {
+      stopListening();
+    }
     return () => {
       stopListening();
     };
-  }, []);
+  }, [isContinuous]);
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden">

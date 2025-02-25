@@ -310,13 +310,14 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
         };
 
         recognition.onerror = async (event: SpeechRecognitionErrorEvent) => {
+          if (event.error === 'aborted') return;
           console.error('Speech recognition error:', event.error);
           
           // Only report errors if we're still meant to be listening
           if (!isListening) return;
           
           // For any error, try to reinitialize
-          if (event.error !== 'no-speech' && event.error !== 'aborted') {
+          if (event.error !== 'no-speech') {
             try {
               recognition = await forceReinitialize();
               recognition.start();
@@ -336,13 +337,16 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
             try {
               // Check if we need to reinitialize before restarting
               if (Date.now() - lastInitTime > REINIT_INTERVAL) {
+                console.log('Performing periodic reinitialization on end');
                 forceReinitialize().then(newRecognition => {
                   if (isListening) {
+                    console.log(`im here 2`)
                     recognition = newRecognition;
                     recognition.start();
                   }
                 });
               } else {
+                console.log('Restarting recognition');
                 recognition?.start();
               }
             } catch (e) {
