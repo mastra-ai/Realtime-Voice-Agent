@@ -311,23 +311,21 @@ export function SpeechRecognitionService(): ISpeechRecognitionService {
 
         recognition.onerror = async (event: SpeechRecognitionErrorEvent) => {
           if (event.error === 'aborted') return;
+          if (event.error === 'no-speech') return;
           console.error('Speech recognition error:', event.error);
           
           // Only report errors if we're still meant to be listening
           if (!isListening) return;
-          
-          // For any error, try to reinitialize
-          if (event.error !== 'no-speech') {
-            try {
-              recognition = await forceReinitialize();
-              recognition.start();
-              return;
-            } catch (reinitError) {
-              console.error('Reinitialization failed:', reinitError);
-              if (isListening) {
-                onError('Recognition error occurred. Please refresh the page.');
-                isListening = false;
-              }
+
+          try {
+            recognition = await forceReinitialize();
+            recognition.start();
+            return;
+          } catch (reinitError) {
+            console.error('Reinitialization failed:', reinitError);
+            if (isListening) {
+              onError('Recognition error occurred. Please refresh the page.');
+              isListening = false;
             }
           }
         };
