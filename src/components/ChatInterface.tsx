@@ -25,7 +25,6 @@ export default function ChatInterface() {
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [volume, setVolume] = useState(0);
-  const [isContinuous, setIsContinuous] = useState(false);
   const [isAISpeaking, setIsAISpeaking] = useState(false);
   const restartTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [retryCount, setRetryCount] = useState(0);
@@ -71,8 +70,8 @@ export default function ChatInterface() {
 
   const stopListening = async () => {
     try {
+      console.log(`Stopping recognition`)
       setRecording(false);
-      setIsContinuous(false);
       await speechService.stopListening();
       setError(null);
     } catch (error) {
@@ -88,10 +87,9 @@ export default function ChatInterface() {
       return;
     }
 
-    setIsContinuous(true);
-    setRecording(true);
     setError(null);
     setRetryCount(0);
+    setRecording(true);
     startListeningCycle();
   };
 
@@ -113,21 +111,18 @@ export default function ChatInterface() {
           
           if (error.includes('refresh')) {
             // Critical error - stop continuous mode
-            setIsContinuous(false);
             setRecording(false);
           } else {
             // For non-critical errors, just show the error
             setError(error);
             
             // Auto-restart after a brief delay
-            if (isContinuous && !isAISpeaking) {
+            if (!isAISpeaking) {
               setTimeout(() => {
-                if (isContinuous) {
-                  setError(null);
-                  setRecording(true);
-                  startListeningCycle();
-                }
-              }, 1000);
+                setError(null);
+                setRecording(true);
+                startListeningCycle();
+              }, 500);
             }
           }
         },
@@ -135,7 +130,7 @@ export default function ChatInterface() {
           setVolume(newVolume);
         },
         () => {
-          if (isContinuous && !isAISpeaking) {
+          if (!isAISpeaking) {
             startListeningCycle();
           }
         },
@@ -144,7 +139,6 @@ export default function ChatInterface() {
     } catch (error) {
       console.error('Failed to start listening cycle:', error);
       setError('Failed to start voice recognition. Please refresh the page.');
-      setIsContinuous(false);
       setRecording(false);
     }
   };
@@ -152,6 +146,9 @@ export default function ChatInterface() {
   const handleSendMessage = async (text: string) => {
     try {
       setProcessing(true);
+      speechService.stopListening();
+      setRecording(false);
+
       addMessage({ role: 'user', content: text });
 
       const response = await fetch('/api/chat', {
@@ -176,33 +173,26 @@ export default function ChatInterface() {
       if (data.audio) {
         setIsAISpeaking(true);
         const audio = new Audio(`data:audio/mp3;base64,${data.audio}`);
-        
-        // Add event listener for when audio starts playing
+
         audio.onplay = () => {
           setIsAISpeaking(true);
         };
         
         audio.onended = () => {
           setIsAISpeaking(false);
-          if (isContinuous) {
-            setRecording(true);
-            startListeningCycle();
-          }
+          setRecording(true);
+          startListeningCycle();
         };
 
         await audio.play().catch(error => {
           console.error('Error playing audio:', error);
           setIsAISpeaking(false);
-          if (isContinuous) {
-            setRecording(true);
-            startListeningCycle();
-          }
-        });
-      } else {
-        if (isContinuous) {
           setRecording(true);
           startListeningCycle();
-        }
+        });
+      } else {
+        setRecording(true);
+        startListeningCycle();
       }
     } catch (error) {
       console.error('Error sending message:', error);
@@ -212,10 +202,8 @@ export default function ChatInterface() {
         content: 'Sorry, I encountered an error processing your request.' 
       });
       
-      if (isContinuous) {
-        setRecording(true);
-        startListeningCycle();
-      }
+      setRecording(true);
+      startListeningCycle();
     } finally {
       setProcessing(false);
     }
@@ -232,6 +220,7 @@ export default function ChatInterface() {
 
   const AILogo = '/images/V-logo.jpeg'; 
 
+  // Cleanup effect
   useEffect(() => {
     return () => {
       stopListening();
